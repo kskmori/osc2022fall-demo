@@ -1,0 +1,120 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+ENV['VAGRANT_EXPERIMENTAL'] = "typed_triggers"
+
+# All Vagrant configuration is done below. The "2" in Vagrant.configure
+# configures the configuration version (we support older styles for
+# backwards compatibility). Please don't change it unless you know what
+# you're doing.
+Vagrant.configure("2") do |config|
+  # The most common configuration options are documented and commented below.
+  # For a complete reference, please see the online documentation at
+  # https://docs.vagrantup.com.
+
+  # Every Vagrant development environment requires a box. You can search for
+  # boxes at https://vagrantcloud.com/search.
+  config.vm.box = "almalinux/9"
+  config.vm.box_version = "9.6.20250522"
+
+  def config_default_network(config, vm_name)
+    # https://github.com/hashicorp/vagrant/issues/8384#issuecomment-548988185
+    vm_exists = system("powershell.exe", "-Command", "Get-VM -VMNAME #{vm_name} -ErrorAction SilentlyContinue | out-null")
+    if !vm_exists
+      config.vm.network "public_network", bridge: "Default Switch"
+      #puts 'Attached public_network to Default Switch'
+    end
+  end
+
+  def config_add_network(config, vm_name)
+    # https://stackoverflow.com/questions/64242931/how-to-use-a-powershell-script-during-vagrant-up-on-host-correctly
+    config.trigger.before :'VagrantPlugins::HyperV::Action::StartInstance', type: :action do |trigger|
+      trigger.info = "Addtional VM Network Adapters"
+      trigger.run = { inline: "./scripts/add-vm-networks.ps1 -VMName #{vm_name}"}
+    end
+  end
+
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+
+  config.vm.define "hv-storage" do |storage|
+    storage.vm.hostname = "hv-storage"
+
+    # storage.vm.network "public_network", bridge: "Default Switch"
+    config_default_network(storage, "hv-storage")
+
+    # storage.vm.network "private_network", ip: "192.168.156.19"
+    # storage.vm.network "private_network", ip: "192.168.157.19"
+    # storage.vm.network "private_network", ip: "192.168.158.19"
+    # storage.vm.network "private_network", ip: "192.168.159.19"
+    config_add_network(storage, "hv-storage")
+    storage.vm.provision "shell" do |shell|
+      shell.path = "./scripts/config-nmcli.sh"
+      shell.args = ["192.168.156.19", "192.168.157.19", "192.168.158.19", "192.168.159.19"]
+    end
+
+    storage.vm.provider "hyperv" do |h|
+      h.vmname = "hv-storage"
+    end
+  end
+
+  config.vm.define "hv-node1" do |node1|
+    node1.vm.hostname = "hv-node1"
+
+    # node1.vm.network "public_network", bridge: "Default Switch"
+    config_default_network(node1, "hv-node1")
+
+    # node1.vm.network "private_network", ip: "192.168.156.11"
+    # node1.vm.network "private_network", ip: "192.168.157.11"
+    # node1.vm.network "private_network", ip: "192.168.158.11"
+    # node1.vm.network "private_network", ip: "192.168.159.11"
+    config_add_network(node1, "hv-node1")
+    node1.vm.provision "shell" do |shell|
+      shell.path = "./scripts/config-nmcli.sh"
+      shell.args = ["192.168.156.11", "192.168.157.11", "192.168.158.11", "192.168.159.11"]
+    end
+
+    node1.vm.provider "hyperv" do |h|
+      h.vmname = "hv-node1"
+    end
+  end
+
+  config.vm.define "hv-node2" do |node2|
+    node2.vm.hostname = "hv-node2"
+
+    # node2.vm.network "public_network", bridge: "Default Switch"
+    config_default_network(node2, "hv-node2")
+
+    # node2.vm.network "private_network", ip: "192.168.156.12"
+    # node2.vm.network "private_network", ip: "192.168.157.12"
+    # node2.vm.network "private_network", ip: "192.168.158.12"
+    # node2.vm.network "private_network", ip: "192.168.159.12"
+    config_add_network(node2, "hv-node2")
+    node2.vm.provision "shell" do |shell|
+      shell.path = "./scripts/config-nmcli.sh"
+      shell.args = ["192.168.156.12", "192.168.157.12", "192.168.158.12", "192.168.159.12"]
+    end
+    node2.vm.provider "hyperv" do |h|
+      h.vmname = "hv-node2"
+    end
+  end
+
+
+  ### TODO: not working now: need priviledge escalation
+  config.trigger.before :up do |trigger|
+    trigger.info = "Creating VM Switches"
+    trigger.run = {
+      privileged: "true",
+      powershell_elevated_interactive: "true",
+      path: "./scripts/create-vmswitch.ps1"
+    }
+  end
+  config.trigger.after :destroy do |trigger|
+    trigger.info = "Removing VM Switches"
+    trigger.run = {
+      privileged: "true",
+      powershell_elevated_interactive: "true",
+      path: "./scripts/remove-vmswitch.ps1"
+    }
+  end
+  
+end

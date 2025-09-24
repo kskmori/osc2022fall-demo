@@ -1,8 +1,16 @@
+
 function CreateNewNetwork {
     param([string]$Name, [string]$IPAddress, [int]$Prefix)
     if ($Name -notin (Get-VMSwitch | Select-Object -ExpandProperty Name)) {
-        New-VMSwitch -Name $Name -SwitchType Internal
+	# Priviledge escalation required for New-NetIPAddress
+        #  Re-run the whole script from the beginning if escalated
+	#  If all VMSwitches are already created, it should exit without prompting the escalation dialog
+        if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+            Start-Process PowerShell -Verb RunAs "-NoProfile -ExecutionPolicy Bypass -Command `"cd '$pwd'; & '$PSCommandPath';`"";
+            exit;
+        }
 
+        New-VMSwitch -Name $Name -SwitchType Internal
         New-NetIPAddress -IPAddress $IPAddress -PrefixLength $Prefix -InterfaceAlias "vEthernet ($Name)"
     }
 }

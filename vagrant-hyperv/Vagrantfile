@@ -30,7 +30,7 @@ Vagrant.configure("2") do |config|
     # https://stackoverflow.com/questions/64242931/how-to-use-a-powershell-script-during-vagrant-up-on-host-correctly
     config.trigger.before :'VagrantPlugins::HyperV::Action::StartInstance', type: :action do |trigger|
       trigger.info = "Addtional VM Network Adapters"
-      trigger.run = { inline: "./scripts/add-vm-networks.ps1 -VMName #{vm_name}"}
+      trigger.run = { inline: "./scripts/vm-add-networks.ps1 -VMName #{vm_name}"}
     end
   end
 
@@ -48,15 +48,15 @@ Vagrant.configure("2") do |config|
     storage.vm.hostname = "hv-storage"
 
     # storage.vm.network "public_network", bridge: "Default Switch"
+    # storage.vm.network "private_network", ip: "192.168.156.19"
     config_default_network(storage, "hv-storage")
 
-    # storage.vm.network "private_network", ip: "192.168.156.19"
     # storage.vm.network "private_network", ip: "192.168.157.19"
     # storage.vm.network "private_network", ip: "192.168.158.19"
     # storage.vm.network "private_network", ip: "192.168.159.19"
     config_add_network(storage, "hv-storage")
     storage.vm.provision "shell" do |shell|
-      shell.path = "./scripts/config-nmcli.sh"
+      shell.path = "./scripts/vm-config-nmcli.sh"
       shell.args = ["192.168.156.19", "192.168.157.19", "192.168.158.19", "192.168.159.19"]
     end
 
@@ -69,15 +69,15 @@ Vagrant.configure("2") do |config|
     node1.vm.hostname = "hv-node1"
 
     # node1.vm.network "public_network", bridge: "Default Switch"
+    # node1.vm.network "private_network", ip: "192.168.156.11"
     config_default_network(node1, "hv-node1")
 
-    # node1.vm.network "private_network", ip: "192.168.156.11"
     # node1.vm.network "private_network", ip: "192.168.157.11"
     # node1.vm.network "private_network", ip: "192.168.158.11"
     # node1.vm.network "private_network", ip: "192.168.159.11"
     config_add_network(node1, "hv-node1")
     node1.vm.provision "shell" do |shell|
-      shell.path = "./scripts/config-nmcli.sh"
+      shell.path = "./scripts/vm-config-nmcli.sh"
       shell.args = ["192.168.156.11", "192.168.157.11", "192.168.158.11", "192.168.159.11"]
     end
 
@@ -90,15 +90,15 @@ Vagrant.configure("2") do |config|
     node2.vm.hostname = "hv-node2"
 
     # node2.vm.network "public_network", bridge: "Default Switch"
+    # node2.vm.network "private_network", ip: "192.168.156.12"
     config_default_network(node2, "hv-node2")
 
-    # node2.vm.network "private_network", ip: "192.168.156.12"
     # node2.vm.network "private_network", ip: "192.168.157.12"
     # node2.vm.network "private_network", ip: "192.168.158.12"
     # node2.vm.network "private_network", ip: "192.168.159.12"
     config_add_network(node2, "hv-node2")
     node2.vm.provision "shell" do |shell|
-      shell.path = "./scripts/config-nmcli.sh"
+      shell.path = "./scripts/vm-config-nmcli.sh"
       shell.args = ["192.168.156.12", "192.168.157.12", "192.168.158.12", "192.168.159.12"]
     end
     node2.vm.provider "hyperv" do |h|
@@ -106,22 +106,13 @@ Vagrant.configure("2") do |config|
     end
   end
 
-  ### TODO: not working now: need priviledge escalation
-  config.trigger.before :up do |trigger|
-    trigger.info = "Creating VM Switches"
-    trigger.run = {
-      privileged: "true",
-      powershell_elevated_interactive: "true",
-      path: "./scripts/create-vmswitch.ps1"
-    }
+  # reboot after provisioning to refresh the network configration
+  #   the IP addresses in VMs are sometimes assigned in wrong order
+  #   when the initial provisioning finished. rebooting should fix it
+  config.vm.provision "reboot", after: :all, type: "shell" do |shell|
+    shell.privileged = true
+    shell.inline = 'echo rebooting'
+    shell.reboot = true
   end
-  config.trigger.after :destroy do |trigger|
-    trigger.info = "Removing VM Switches"
-    trigger.run = {
-      privileged: "true",
-      powershell_elevated_interactive: "true",
-      path: "./scripts/remove-vmswitch.ps1"
-    }
-  end
-  
+
 end
